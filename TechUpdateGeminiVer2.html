@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Tech Roster Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-tertiary: #2d2d2d;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --accent: #4f86f7;
+            --accent-hover: #6ca0ff;
+            --danger: #ff5f5f;
+            --success: #4caf50;
+            --border: #404040;
+        }
+        body {
+            font-family: 'Atkinson Hyperlegible', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            grid-template-rows: 1fr 220px;
+            gap: 20px;
+            grid-template-areas: "sidebar main" "sidebar output";
+        }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg-main); }
+        ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 5px; }
+        h2, h3 { margin-top: 0; }
+        #sidebar { grid-area: sidebar; background: var(--bg-secondary); padding: 15px; border-radius: 8px; border: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; gap: 10px;}
+        #main-editor { grid-area: main; background: var(--bg-secondary); padding: 20px; border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+        #output-area { grid-area: output; background: var(--bg-secondary); padding: 15px; border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; }
+        
+        .tabs { display: flex; margin-bottom: 15px; border-bottom: 2px solid var(--border); }
+        .tab { padding: 10px 20px; cursor: pointer; background: var(--bg-tertiary); margin-right: 5px; border-radius: 8px 8px 0 0; font-weight: bold; color: var(--text-secondary); user-select: none; transition: 0.2s; }
+        .tab:hover { background: #383838; }
+        .tab.active { background: var(--accent); color: white; }
+        
+        .table-container { flex: 1; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th { text-align: left; background: var(--bg-tertiary); position: sticky; top: 0; padding: 10px; z-index: 2; border-bottom: 2px solid var(--border); }
+        td { padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); }
+        
+        /* Dragging Styles */
+        tr.draggable { cursor: grab; }
+        tr.draggable:active { cursor: grabbing; }
+        tr.dragging { opacity: 0.5; background: var(--bg-tertiary); }
+        tr.drag-over { border-top: 2px solid var(--accent); }
+        .drag-handle { color: var(--text-secondary); cursor: grab; font-size: 1.2em; user-select: none; text-align: center; }
+
+        input[type="text"] { background: var(--bg-main); border: 1px solid var(--border); color: var(--text-primary); padding: 6px 10px; border-radius: 4px; width: 100%; font-family: inherit; font-size: 14px; box-sizing: border-box; }
+        input[type="text"]:focus { outline: 2px solid var(--accent); border-color: transparent; }
+        input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); }
+        
+        button { background: var(--accent); color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-family: inherit; transition: background 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+        button:hover { background: var(--accent-hover); }
+        .btn-danger { background: var(--danger); padding: 5px 10px; font-size: 0.9em; }
+        .btn-danger:hover { background: #ff4444; }
+        .btn-add { background: var(--bg-tertiary); color: var(--accent); width: 100%; padding: 15px; border: 2px dashed var(--border); margin-top: 10px; }
+        .btn-add:hover { background: var(--bg-main); border-color: var(--accent); }
+        
+        /* New Button Styles */
+        .btn-primary { background: #28a745; width: 100%; margin-bottom: 10px; padding: 12px; font-size: 14px;}
+        .btn-primary:hover { background: #34c25a; }
+        
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); margin-right: 8px; border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--border); }
+        .btn-group { display: flex; gap: 8px; }
+
+        #code-output { flex: 1; background: var(--bg-main); padding: 15px; font-family: 'Courier New', monospace; font-size: 13px; overflow: auto; white-space: pre-wrap; color: #a5d6ff; border-radius: 4px; margin-top: 10px; border: 1px solid var(--border); }
+        
+        .preview-list-item { padding: 10px; background: var(--bg-main); border-radius: 4px; border: 1px solid var(--border); }
+        .preview-label { font-weight: bold; color: var(--accent); margin-bottom: 5px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.5px; }
+        .preview-val { font-family: monospace; color: var(--text-secondary); word-break: break-all; font-size: 0.85em; }
+        
+        .controls { display: flex; justify-content: space-between; align-items: center; }
+        #copy-status { color: var(--success); opacity: 0; transition: opacity 0.3s; font-weight: bold; margin-right: 15px;}
+        
+        .helper-text { font-size: 0.8em; color: var(--text-secondary); margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <aside id="sidebar">
+        <h3>Current Ranges</h3>
+        <p class="helper-text">These ranges are calculated based on the order of the tabs (VA > MD > Tide).</p>
+        <div id="sidebar-content"></div>
+    </aside>
+
+    <main id="main-editor">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('VA')">VA Roster</div>
+            <div class="tab" onclick="switchTab('MD')">MD Roster</div>
+            <div class="tab" onclick="switchTab('Tide')">Tide Roster</div>
+        </div>
+        <div class="table-container">
+            <table id="roster-table">
+                <thead>
+                    <tr>
+                        <th width="40"></th>
+                        <th width="60">ID</th>
+                        <th width="40%">Name (PestPac Exact Match)</th>
+                        <th width="15%" title="Actisol Skill">ACT</th>
+                        <th width="15%" title="Termite Skill">TM</th>
+                        <th width="60"></th>
+                    </tr>
+                </thead>
+                <tbody id="roster-body"></tbody>
+            </table>
+            <button class="btn-add" onclick="addRow()">+ Add Tech to Current Region</button>
+        </div>
+    </main>
+
+    <footer id="output-area">
+        <div class="controls">
+            <h3>Output Tools</h3>
+            <div class="btn-group">
+                <span id="copy-status">Copied!</span>
+                <button class="btn-primary" onclick="generateFullJSON()" title="Copy list to paste into PestPac script">
+                   <span>📋</span> COPY LIST FOR PESTPAC
+                </button>
+                <button class="btn-secondary" onclick="generateCode()" title="Generates JS for Quick Scheduler">
+                    <span>⚙️</span> Generate Ranges
+                </button>
+            </div>
+        </div>
+        <div id="code-output">// Click a button above to generate code...</div>
+    </footer>
+
+    <script>
+        // --- State Management ---
+        let appState = {
+            currentTab: 'VA',
+            regions: {
+                VA: [{ name: "Tech 1", act: true, tm: false }, { name: "Tech 2", act: false, tm: true }],
+                MD: [{ name: "MD 1", act: true, tm: true }],
+                Tide: [{ name: "Tide 1", act: false, tm: false }]
+            }
+        };
+
+        const savedState = localStorage.getItem('techrRoosterState');
+        if (savedState) { try { appState = JSON.parse(savedState); } catch (e) { console.error(e); } }
+
+        // --- Core Functions ---
+        function switchTab(r) {
+            appState.currentTab = r;
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.innerText.startsWith(r)));
+            renderTable();
+        }
+
+        function renderTable() {
+            const r = appState.currentTab;
+            const list = appState.regions[r];
+            const tbody = document.getElementById('roster-body');
+            tbody.innerHTML = '';
+            
+            let startId = 3; 
+            if (r === 'MD') startId += appState.regions.VA.length;
+            if (r === 'Tide') startId += appState.regions.VA.length + appState.regions.MD.length;
+
+            list.forEach((tech, i) => {
+                const tr = document.createElement('tr');
+                tr.className = 'draggable';
+                tr.draggable = true;
+                tr.dataset.index = i;
+                
+                tr.innerHTML = `
+                    <td class="drag-handle">☰</td>
+                    <td style="color:var(--text-secondary)">${startId + i}</td>
+                    <td><input type="text" value="${tech.name}" oninput="updateTech('${r}',${i},'name',this.value)" placeholder="Enter Name..."></td>
+                    <td><input type="checkbox" ${tech.act?'checked':''} onchange="updateTech('${r}',${i},'act',this.checked)"></td>
+                    <td><input type="checkbox" ${tech.tm?'checked':''} onchange="updateTech('${r}',${i},'tm',this.checked)"></td>
+                    <td><button class="btn-danger" onclick="deleteRow('${r}',${i})">X</button></td>
+                `;
+                addDragEvents(tr);
+                tbody.appendChild(tr);
+            });
+            
+            saveState();
+            updatePreview();
+        }
+
+        // --- Drag & Drop Logic ---
+        let dragSrcEl = null;
+        function addDragEvents(row) {
+            row.addEventListener('dragstart', function(e) {
+                dragSrcEl = this;
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => this.classList.add('dragging'), 0);
+            });
+            row.addEventListener('dragover', function(e) {
+                if(e.preventDefault) e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                return false;
+            });
+            row.addEventListener('dragenter', function() {
+                if(this !== dragSrcEl) this.classList.add('drag-over');
+            });
+            row.addEventListener('dragleave', function() {
+                this.classList.remove('drag-over');
+            });
+            row.addEventListener('drop', function(e) {
+                if(e.stopPropagation) e.stopPropagation();
+                if(dragSrcEl !== this) {
+                    const list = appState.regions[appState.currentTab];
+                    const fromIdx = parseInt(dragSrcEl.dataset.index);
+                    const toIdx = parseInt(this.dataset.index);
+                    const [moved] = list.splice(fromIdx, 1);
+                    list.splice(toIdx, 0, moved);
+                    renderTable();
+                }
+                return false;
+            });
+            row.addEventListener('dragend', function() {
+                this.classList.remove('dragging');
+                document.querySelectorAll('#roster-body tr').forEach(r => r.classList.remove('drag-over'));
+            });
+        }
+
+        // --- Data Manipulation ---
+        function updateTech(r, i, field, value) {
+            appState.regions[r][i][field] = value;
+            saveState();
+            updatePreview();
+        }
+
+        function addRow() {
+            appState.regions[appState.currentTab].push({ name: "", act: false, tm: false });
+            renderTable();
+        }
+
+        function deleteRow(r, i) {
+            if(confirm("Are you sure you want to delete this tech?")) {
+                appState.regions[r].splice(i, 1);
+                renderTable();
+            }
+        }
+
+        function saveState() {
+            localStorage.setItem('techrRoosterState', JSON.stringify(appState));
+        }
+
+        // --- Range Generation ---
+        function getRanges(rName, type) {
+            let start = 3;
+            if (rName === 'MD') start += appState.regions.VA.length;
+            else if (rName === 'Tide') start += appState.regions.VA.length + appState.regions.MD.length;
+
+            const list = appState.regions[rName];
+            let ranges = [], currStart = null;
+            for (let i = 0; i < list.length; i++) {
+                const isActive = (type === 'ALL') ? true : (type === 'ACT' ? list[i].act : list[i].tm);
+                if (isActive) {
+                    if (currStart === null) currStart = start + i;
+                } else {
+                    if (currStart !== null) { ranges.push({ start: currStart, end: start + i - 1 }); currStart = null; }
+                }
+            }
+            if (currStart !== null) ranges.push({ start: currStart, end: start + list.length - 1 });
+            return ranges;
+        }
+
+        function fmtRanges(r) {
+            return r.length === 0 ? "[]" : `[ ${r.map(x => `{ start: ${x.start}, end: ${x.end} }`).join(", ")} ]`;
+        }
+
+        function generateCode() {
+            const vaL = appState.regions.VA.length;
+            const mdL = appState.regions.MD.length;
+            const tiL = appState.regions.Tide.length;
+            const code = 
+`// Region Buttons
+addTechButton("VA Techs", "#262F6A", ${vaL>0 ? fmtRanges([{start:3, end:3+vaL-1}]) : "[]"}, container, "1:1");
+addTechButton("MD Techs", "#262F6A", ${mdL>0 ? fmtRanges([{start:3+vaL, end:3+vaL+mdL-1}]) : "[]"}, container, "1:2");
+addTechButton("Tide", "#262F6A", ${tiL>0 ? fmtRanges([{start:3+vaL+mdL, end:3+vaL+mdL+tiL-1}]) : "[]"}, container, "4:1");
+
+// Skill Buttons
+addTechButton("VA ACT", "#0057E9", ${fmtRanges(getRanges('VA','ACT'))}, container, "2:1");
+addTechButton("MD ACT", "#0057E9", ${fmtRanges(getRanges('MD','ACT'))}, container, "2:2");
+addTechButton("VA TM", "#EF4255", ${fmtRanges(getRanges('VA','TM'))}, container, "3:1");
+addTechButton("MD TM", "#EF4255", ${fmtRanges(getRanges('MD','TM'))}, container, "3:2");`;
+            document.getElementById('code-output').innerText = code;
+            copyToClipboard(code);
+        }
+
+        // --- JSON Generation (For Copy/Paste) ---
+        function generateFullJSON() {
+            const list = [...appState.regions.VA, ...appState.regions.MD, ...appState.regions.Tide]
+                .map(t => t.name.trim())
+                .filter(n => n.length > 0);
+            const json = JSON.stringify(list, null, 2);
+            document.getElementById('code-output').innerText = json;
+            copyToClipboard(json);
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const s = document.getElementById('copy-status');
+                s.style.opacity = 1;
+                setTimeout(() => s.style.opacity = 0, 2000);
+            });
+        }
+
+        function updatePreview() {
+            const s = document.getElementById('sidebar-content');
+            const vaL = appState.regions.VA.length;
+            const mdL = appState.regions.MD.length;
+            const tiL = appState.regions.Tide.length;
+            s.innerHTML = [
+                { l: "VA Techs", v: vaL > 0 ? fmtRanges([{start: 3, end: 3 + vaL - 1}]) : "[]" },
+                { l: "MD Techs", v: mdL > 0 ? fmtRanges([{start: 3 + vaL, end: 3 + vaL + mdL - 1}]) : "[]" },
+                { l: "Tide", v: tiL > 0 ? fmtRanges([{start: 3 + vaL + mdL, end: 3 + vaL + mdL + tiL - 1}]) : "[]" },
+                { l: "VA ACT", v: fmtRanges(getRanges('VA', 'ACT')) }, { l: "MD ACT", v: fmtRanges(getRanges('MD', 'ACT')) },
+                { l: "VA TM", v: fmtRanges(getRanges('VA', 'TM')) }, { l: "MD TM", v: fmtRanges(getRanges('MD', 'TM')) }
+            ].map(i => `<div class="preview-list-item"><div class="preview-label">${i.l}</div><div class="preview-val">${i.v}</div></div>`).join('');
+        }
+
+        renderTable();
+    </script>
+</body>
+</html>
