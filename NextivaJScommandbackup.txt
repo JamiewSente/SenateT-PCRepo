@@ -1,0 +1,63 @@
+(() => {
+  const LED_SERVER = "http://127.0.0.1:3000";
+  let lastLedState = null;
+
+  function setLed(state) {
+    if (state === lastLedState) return;
+    lastLedState = state;
+    fetch(`${LED_SERVER}/set?state=${state}`, { mode: "no-cors" }).catch(() => {});
+  }
+
+  function isInCall() {
+    const el = document.querySelector(".css-kknodv");
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return (
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      rect.width > 0 &&
+      rect.height > 0
+    );
+  }
+
+  setLed(isInCall() ? "on" : "off");
+
+  setInterval(() => {
+    setLed(isInCall() ? "on" : "off");
+  }, 1000);
+
+  console.info("Busy Light: Watching .css-kknodv visibility with no-cors fetch.");
+})();
+
+
+===========================
+cancel all but one command
+===========================
+
+(() => {
+  // clear intervals and timeouts (range covers typical IDs)
+  for (let i = 1; i < 10000; i++) { clearInterval(i); clearTimeout(i); }
+
+  // neutralize common globals the injected script might have created
+  try { window.setLed = () => {}; window.isInCall = () => false; window.lastLedState = null; } catch (e) {}
+
+  console.info('Busy Light: cleared intervals/timeouts and neutralized functions.');
+})();
+
+=======================
+full clear for slowdown issues
+=======================
+
+// DELETE EVERYTHING AND RESTART
+indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name)));
+localStorage.clear();
+sessionStorage.clear();
+window.location.reload();
+
+=======================
+=======================
+
+// DELETE ONLY LOGS/DB, KEEP SETTINGS
+indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name)));
+console.log("Databases cleared. Manually restart the app now.");

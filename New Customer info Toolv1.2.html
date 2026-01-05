@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23009dd1'/%3E%3C/svg%3E" />
+<meta charset="utf-8" />
+<title>New Customer Information Tool</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root{--primary:#0366d6;--muted:#666;--bg:#f7f8fb;--panel:#eef6ff;--panel-text:#07112a}
+  body{font-family: 'Atkinson Hyperlegible', sans-serif;margin:16px;background:var(--bg);color:#111}
+  h1{font-size:18px;margin:0 0 12px}
+  label{font-size:12px;color:#333;display:block;margin-bottom:6px}
+  textarea,input,button,select{font:13px/1.2 Segoe UI,Arial,sans-serif}
+  #raw{width:100%;height:220px;padding:10px;border:1px solid #ccd;box-sizing:border-box;border-radius:8px;color:#111;background:#fff}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;align-items:start}
+  input[type="text"], input[type="email"], input[type="tel"]{width:100%;padding:8px;border:1px solid #ccd;border-radius:6px;box-sizing:border-box}
+  .row{display:flex;gap:8px;margin-top:8px;align-items:center}
+  .primary{padding:8px 12px;border-radius:6px;border:0;background:var(--primary);color:#fff;cursor:pointer}
+  .ghost{padding:8px 12px;border-radius:6px;border:1px solid #ccd;background:#fff;color:var(--primary);cursor:pointer}
+  .small{font-size:12px;color:var(--muted);margin-top:6px}
+  .status{font-size:13px;color:var(--primary);margin-left:8px}
+  .log-box{width:100%;height:140px;padding:8px;border:1px solid #ccd;border-radius:6px;background:var(--panel);overflow:auto;white-space:pre-wrap;font-family:monospace;font-size:12px;color:var(--panel-text)}
+  .collapse-btn{background:#fff;border:1px solid #ccd;color:var(--primary);padding:6px 10px;border-radius:6px;cursor:pointer}
+  .log-item{display:block;text-align:left;padding:6px;border-radius:6px;margin-bottom:6px;border:1px solid #e6eefb;background:#fff;color:var(--panel-text);cursor:pointer}
+  .log-item:hover{background:#f0f6ff}
+  .log-sep{font-family:monospace;color:#22314a;padding:6px 0}
+  .tidewater-wrap{display:flex;align-items:center;gap:8px}
+  .tidewater-wrap input{width:16px;height:16px;margin:0}
+  .field-wide{grid-column:1/3}
+  @media (max-width:720px){ .grid{grid-template-columns:1fr} .field-wide{grid-column:1/2} }
+</style>
+</head>
+<body>
+<h1>New Customer Information Tool</h1>
+
+<label for="raw">Paste raw contact text here</label>
+<textarea id="raw" placeholder='Free-form lines or JSON; examples:
+John Doe
+123 Main St
+Anytown, ST 12345
+555-555-0123
+john.doe@example.com
+—or—
+{"firstName":"Jane","lastName":"Doe","streetAddress":"456 Oak Ave Apt 9","zip":"12345","email":"jane.doe@example.com","city":"Anytown"}'></textarea>
+
+<div class="row" style="margin-top:8px">
+  <button id="parseBtn" class="primary">Organize</button>
+  <button id="generateBtn" class="primary">Save Entry</button>
+  <button id="clearBtn" class="ghost">Clear Form</button>
+  <div id="logStatus" class="status"></div>
+</div>
+
+<div class="grid" style="margin-top:12px">
+  <div><label>First Name</label><input id="firstName" type="text" /></div>
+  <div><label>Last Name</label><input id="lastName" type="text" /></div>
+
+  <div><label>Street Address</label><input id="streetAddress" type="text" /></div>
+  <div><label>Apt / Unit</label><input id="apt" type="text" placeholder="Apt 1427 / Unit 5B" /></div>
+
+  <div><label>City</label><input id="city" type="text" /></div>
+  <div><label>State</label><input id="state" type="text" /></div>
+
+  <div><label>Zip</label><input id="zip" type="text" /></div>
+  <div><label>Email</label><input id="email" type="email" /></div>
+
+  <div><label>Phone</label><input id="phone" type="tel" /></div>
+
+  <div class="field-wide">
+    <label>Source</label>
+    <input id="source" type="text" placeholder="google, HA, angi, webform, referral, gci, etc." />
+    <div class="small">Source shown/stored here. JSON inputs with no source default to Home Advisor; free-form with no source defaults to Google.</div>
+  </div>
+
+  <div class="tidewater-wrap">
+    <input id="tidewater" type="checkbox" />
+    <label for="tidewater" style="margin:0">Tidewater (override)</label>
+    <div class="small" style="margin-left:8px;color:var(--muted)">Auto-set for VA + Norfolk/Hampton/Chesapeake/Virginia Beach/Suffolk</div>
+  </div>
+</div>
+
+<div class="row" style="margin-top:12px">
+  <button id="copyJson" class="primary">Copy JSON</button>
+  <button id="downloadLog" class="ghost">Download Log</button>
+  <button id="clearLog" class="ghost">Clear Log</button>
+  <button id="loadSelectedJson" class="ghost" style="display:none;margin-left:8px">Copy Selected JSON</button>
+</div>
+
+<div id="previewPanel" style="margin-top:12px;border:1px solid #e0e8f6;border-radius:8px;background:#fff;overflow:hidden">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:linear-gradient(180deg,#fff,#fbfdff);">
+    <strong>Preview</strong>
+    <button id="togglePreview" class="collapse-btn">Show</button>
+  </div>
+  <div id="previewBody" style="padding:12px;border-top:1px solid #eef6ff;display:none">
+    <pre id="preview" aria-live="polite" style="background:#f8fafc;padding:10px;border-radius:6px"></pre>
+  </div>
+</div>
+
+<div id="logPanel" style="margin-top:12px;border:1px solid #e0e8f6;border-radius:8px;background:#fff;overflow:hidden">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:linear-gradient(180deg,#fff,#fbfdff);">
+    <strong>Recent log (last 4)</strong>
+    <button id="toggleLog" class="collapse-btn">Show</button>
+  </div>
+  <div id="logBody" style="padding:12px;border-top:1px solid #eef6ff;display:none">
+    <div id="logPreview" class="log-box" aria-live="polite"></div>
+
+    <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+      <button id="toggleOlder" class="collapse-btn">Show older entries</button>
+      <div id="olderCount" class="small" style="color:var(--muted)"></div>
+    </div>
+
+    <div id="olderContainer" style="margin-top:8px;display:none">
+      <h4 style="margin:6px 0 6px">Older entries (past 7 days)</h4>
+      <div id="olderPreview" class="log-box" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- CONFIG (constants + maps + helper defs) ---------- */
+
+// Canonical names (uppercase for boolean checks)
+const TIDEWATER_CITIES = ['NORFOLK','HAMPTON','CHESAPEAKE','VIRGINIA BEACH','SUFFOLK','NEWPORT NEWS','PORTSMOUTH'];
+
+// Map of normalized keys -> canonical city
+const TIDEWATER_MAP = (function(){
+  const m = {};
+  const variants = [
+    'norfolk', 'norfolk va', 'norfolk, va',
+    'hampton', 'hampton va', 'hampton, va',
+    'chesapeake', 'chesapeake va', 'chesapeake, va',
+    'virginia beach', 'virginia-beach', 'virginia_beach', 'virginia beach va', 'virginia beach, va',
+    'suffolk', 'suffolk va', 'suffolk, va',
+    'newport news', 'newport-news', 'newport_news', 'newportnews', 'newport news va', 'newport news, va',
+    'portsmouth', 'portsmouth va', 'portsmouth, va', 'portsmouth,virginia'
+  ];
+
+  function normalizeKey(k){
+    return (k||'').toString().toLowerCase()
+      .replace(/[^\w\s-]/g,'')   // remove punctuation except dash/underscore
+      .replace(/[_-]+/g,' ')     // convert underscores/dashes to spaces
+      .replace(/\s+/g,' ')       // collapse spaces
+      .trim();
+  }
+
+  variants.forEach(v => {
+    const key = normalizeKey(v);
+    let canonical = '';
+    if (key.includes('norfolk')) canonical = 'Norfolk';
+    else if (key.includes('hampton')) canonical = 'Hampton';
+    else if (key.includes('chesapeake')) canonical = 'Chesapeake';
+    else if (key.includes('virginia beach')) canonical = 'Virginia Beach';
+    else if (key.includes('suffolk')) canonical = 'Suffolk';
+    else if (key.includes('newport')) canonical = 'Newport News';
+    else if (key.includes('portsmouth')) canonical = 'Portsmouth';
+    if (canonical) m[key] = canonical;
+  });
+
+  return m;
+})();
+
+// Helpers
+function toCanonicalCity(input){
+  const key = (input||'').toString();
+  const norm = key.toLowerCase().replace(/[^\w\s-]/g,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  return TIDEWATER_MAP[norm] || null;
+}
+
+function isTidewater(input){
+  const c = toCanonicalCity(input);
+  return !!c && TIDEWATER_CITIES.includes(c.toUpperCase());
+}
+
+const DC_ZIP_CODES = [
+  '20001','20002','20003','20004','20005','20006','20007','20008','20009',
+  '20010','20011','20012','20015','20016','20017','20018','20019','20020',
+  '20024','20032','20036','20037','20052','20057','20064'
+];
+
+/* ---------- Basic helpers ---------- */
+
+function titleCase(s){
+  if(!s) return '';
+  return (''+s).toLowerCase().split(/\s+/).map(w=> w.charAt(0).toUpperCase()+w.slice(1)).join(' ').replace(/\bUsa\b/i,'USA');
+}
+
+function looksLikePhone(line){
+  if(!line) return false;
+  return /(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/.test(line);
+}
+
+// parseCityStateZip: returns {city,state,zip} given a line like "Suffolk VA, 23434" or "Suffolk, VA 23434"
+function parseCityStateZip(line){
+  const out = {city:'',state:'',zip:''};
+  if(!line) return out;
+  let s = line.trim().replace(/\|/g,',').replace(/\s+\/\s+/g,', ').replace(/\s*,\s*/g,', ');
+  let m = s.match(/^(.+?),\s*([A-Za-z]{2})[,\s]+(\d{5}(?:-\d{4})?)$/);
+  if(m){
+    out.city = titleCase(m[1].trim());
+    out.state = (m[2]||'').toUpperCase();
+    out.zip = (m[3]||'').slice(0,5);
+    return out;
+  }
+  m = s.match(/^(.+?)\s+([A-Za-z]{2})[,\s]+(\d{5}(?:-\d{4})?)$/);
+  if(m){
+    out.city = titleCase(m[1].trim());
+    out.state = (m[2]||'').toUpperCase();
+    out.zip = (m[3]||'').slice(0,5);
+    return out;
+  }
+  m = s.match(/^(.+?),\s*(\d{5}(?:-\d{4})?)$/);
+  if(m){
+    out.city = titleCase(m[1].trim());
+    out.zip = (m[2]||'').slice(0,5);
+    return out;
+  }
+  m = s.match(/(.*)\b(\d{5})(?:-\d{4})?\b/);
+  if(m){
+    out.city = titleCase((m[1]||'').replace(/,+$/,'').trim());
+    out.zip = (m[2]||'').slice(0,5);
+    const st = out.city.match(/\b([A-Za-z]{2})\b$/);
+    if(st && st[1].length===2){
+      out.state = st[1].toUpperCase();
+      out.city = out.city.replace(/\b[A-Za-z]{2}\b$/,'').trim();
+    }
+    return out;
+  }
+  const parts = s.split(',');
+  if(parts.length>1){
+    out.city = titleCase(parts[0].trim());
+  } else {
+    out.city = titleCase(s.trim());
+  }
+  return out;
+}
+
+function tryExtractJSONObjects(text){
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  if(first !== -1 && last !== -1 && last > first){
+    return [text.slice(first, last+1)];
+  }
+  return [];
+}
+function safeParseJSON(s){
+  try{ return JSON.parse(s); } catch(e){ try{ return JSON.parse(s.replace(/'/g,'"')); }catch(e2){ return null; } }
+}
+
+/* Helper: extract apt/unit that may appear at end of a city/state/zip string */
+function extractAptFromCSZ(cszRaw){
+  if(!cszRaw) return {csz: cszRaw, apt: null};
+  let s = cszRaw.trim();
+  s = s.replace(/\s*\|\s*/g, ', ').replace(/\s+\/\s+/g, ', ');
+  s = s.replace(/\s*,\s*$/,'');
+  const trailingAptRE = /(?:,|\s|^)*(?:apt\.?|apartment|unit|suite|ste|bldg|building|room|rm|fl|floor|#)\s*[:.\s#-]*([A-Za-z0-9-]+(?:\s*[A-Za-z0-9-]+)*)\s*$/i;
+  const zipThenAptRE = /(\d{5})(?:\s*[,;]?\s*)(?:apt\.?|apartment|unit|suite|ste|#)\s*[:.\s#-]*([A-Za-z0-9-]+(?:\s*[A-Za-z0-9-]+)*)\s*$/i;
+  const zipWithAnyAptRE = /(\d{5})(?:\s*[,;]?\s*)([#]\s*[A-Za-z0-9-]+)\s*$/i;
+
+  let m = s.match(zipThenAptRE);
+  if(m){
+    const zip = m[1];
+    const aptRaw = m[2].trim();
+    const normalizedApt = (/^\d+$/.test(aptRaw) ? ('Apt ' + aptRaw) : (/^#/.test(aptRaw) ? aptRaw.replace(/\s+/,'') : ('Apt ' + aptRaw)));
+    const cleaned = s.replace(m[0], zip).replace(/\s*,\s*$/,'').trim();
+    return {csz: cleaned, apt: normalizedApt};
+  }
+
+  m = s.match(zipWithAnyAptRE);
+  if(m){
+    const zip = m[1];
+    const aptRaw = (m[2] || '').replace(/^\s*#\s*/,'').trim();
+    const normalizedApt = ('Apt ' + aptRaw).trim();
+    const cleaned = s.replace(m[0], zip).replace(/\s*,\s*$/,'').trim();
+    return {csz: cleaned, apt: normalizedApt};
+  }
+
+  m = s.match(trailingAptRE);
+  if(m){
+    const aptRaw = m[1].trim();
+    const leadingKw = m[0].match(/\b(?:apt|apt\.?|apartment|unit|suite|ste|bldg|building|room|rm|fl|floor|#)\b/i);
+    let normalizedApt = aptRaw;
+    if(leadingKw && /^#/.test(m[0])) normalizedApt = ('#' + aptRaw);
+    else if(leadingKw) {
+      const kw = (leadingKw[0]||'apt').replace(/\.$/,'');
+      normalizedApt = (kw.charAt(0).toUpperCase() + kw.slice(1) + ' ' + aptRaw).replace(/\s+/g,' ').trim();
+    } else {
+      normalizedApt = ('Apt ' + aptRaw).trim();
+    }
+    const cleaned = s.replace(m[0], '').replace(/\s*,\s*$/,'').trim();
+    return {csz: cleaned, apt: normalizedApt};
+  }
+  return {csz: cszRaw, apt: null};
+}
+
+/* ---------- Main parser: parseRawInput ----------
+   JSON-first parsing with post-JSON contact scan, then robust free-form fallback.
+   Requires helpers/constants: titleCase, parseCityStateZip, extractAptFromCSZ,
+   tryExtractJSONObjects, safeParseJSON, TIDEWATER_MAP, TIDEWATER_CITIES, DC_ZIP_CODES
+*/
+function parseRawInput(raw) {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return null;
+
+  // ---------- Helpers (local) ----------
+  function cleanCityString(s) {
+    return (s || '').toString().trim().toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ');
+  }
+  function inferStateFromZip(zip) {
+    if (!zip) return '';
+    const p = ('' + zip).replace(/[^\d]/g, '').slice(0,3);
+    const ZIP_STATE_MAP = { '200':'DC','201':'VA','220':'VA','221':'VA','222':'VA','223':'VA','208':'MD','207':'MD','234':'VA' };
+    return ZIP_STATE_MAP[p] || '';
+  }
+
+  // ---------- Helper: resolve Tidewater city names robustly ----------
+  function resolveTidewaterCity(rawCity) {
+    if (!rawCity) return '';
+    const clean = s => ('' + s).toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
+    const target = clean(rawCity);
+    if (!target) return '';
+    if (TIDEWATER_MAP && typeof TIDEWATER_MAP === 'object') {
+      // direct by cleaned key
+      if (TIDEWATER_MAP[target]) return TIDEWATER_MAP[target];
+      // scan map keys (handles keys with different punctuation/spacing)
+      for (const k of Object.keys(TIDEWATER_MAP)) {
+        if (clean(k) === target) return TIDEWATER_MAP[k];
+        if (clean(TIDEWATER_MAP[k]) === target) return TIDEWATER_MAP[k];
+      }
+    }
+    // fallback: title-case the raw input
+    return titleCase(rawCity.trim());
+  }
+  
+// ---------- Helper: normalize city key ----------
+function normalizeCityKey(s){
+  return (s || '').toString().toLowerCase().replace(/[^a-z\s]/g,'').replace(/\s+/g,' ').trim();
+}
+
+// ---------- Helper: resolve Tidewater city names robustly ----------
+function resolveTidewaterCity(rawCity){
+  if(!rawCity) return '';
+  const key = normalizeCityKey(rawCity);
+  if(!key) return '';
+  if (TIDEWATER_MAP && typeof TIDEWATER_MAP === 'object') {
+    if (TIDEWATER_MAP[key]) return TIDEWATER_MAP[key];
+    for (const k of Object.keys(TIDEWATER_MAP)) {
+      if (normalizeCityKey(k) === key) return TIDEWATER_MAP[k];
+      if (normalizeCityKey(TIDEWATER_MAP[k]) === key) return TIDEWATER_MAP[k];
+    }
+  }
+  return titleCase(rawCity.trim());
+}
+
+// ---------- Helper: check Tidewater membership ----------
+function isTidewaterCityName(city){
+  if(!city) return false;
+  const c = normalizeCityKey(city);
+  if (!c) return false;
+  if (Array.isArray(TIDEWATER_CITIES)) {
+    for (const v of TIDEWATER_CITIES) if (normalizeCityKey(v) === c) return true;
+  }
+  if (TIDEWATER_MAP && typeof TIDEWATER_MAP === 'object') {
+    for (const k of Object.keys(TIDEWATER_MAP)) {
+      if (normalizeCityKey(k) === c) return true;
+      if (normalizeCityKey(TIDEWATER_MAP[k]) === c) return true;
+    }
+  }
+  return false;
+}
+  // ---------- Helper: check Tidewater membership ----------
+  function isTidewaterCityName(city) {
+    if (!city) return false;
+    const clean = s => ('' + s).toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
+    const c = clean(city);
+    if (Array.isArray(TIDEWATER_CITIES)) {
+      for (const v of TIDEWATER_CITIES) if (clean(v) === c) return true;
+    }
+    if (TIDEWATER_MAP && typeof TIDEWATER_MAP === 'object') {
+      for (const k of Object.keys(TIDEWATER_MAP)) {
+        if (clean(k) === c) return true;
+        if (clean(TIDEWATER_MAP[k]) === c) return true;
+      }
+    }
+    return false;
+  }
+
+  // ---------- Helper: scan only the text after a JSON snippet for phone/email ----------
+  function scanAfterJson(rawText, jsonSnippet, out) {
+    if (!rawText) return out;
+    let remainder = '';
+    if (jsonSnippet && rawText.indexOf(jsonSnippet) !== -1) {
+      const idx = rawText.indexOf(jsonSnippet) + jsonSnippet.length;
+      remainder = rawText.slice(idx);
+    } else {
+      const last = rawText.lastIndexOf('}');
+      remainder = last !== -1 ? rawText.slice(last + 1) : '';
+    }
+    if (!remainder) return out;
+    const remLines = remainder.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const phoneRe = /(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/;
+    const emailRe = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,})/;
+    for (const ln of remLines) {
+      if (!out.phone) {
+        const pm = ln.match(phoneRe);
+        if (pm) out.phone = pm[1].trim();
+      }
+      if (!out.email) {
+        const em = ln.match(emailRe);
+        if (em) out.email = em[1].trim();
+      }
+      if (out.phone && out.email) break;
+    }
+    return out;
+  }
+
+  // ---------- JSON path ----------
+  try {
+    if (trimmed.includes('{')) {
+      const foundList = (typeof tryExtractJSONObjects === 'function')
+        ? tryExtractJSONObjects(trimmed)
+        : (function(){ const f = trimmed.indexOf('{'), l = trimmed.lastIndexOf('}'); return (f!==-1 && l!==-1 && l>f) ? [trimmed.slice(f,l+1)] : []; })();
+
+      if (foundList && foundList.length) {
+        const jsonSnippet = foundList[0];
+        const parsed = (typeof safeParseJSON === 'function') ? safeParseJSON(jsonSnippet) : (function(){ try { return JSON.parse(jsonSnippet); } catch(e) { return null; } })();
+
+        if (parsed && typeof parsed === 'object') {
+          // --- City normalization (from multiple possible JSON keys) ---
+          const candidates = [
+            parsed.city, parsed.town, parsed.locality,
+            parsed.cityName, parsed.city_name,
+            parsed.address && parsed.address.city,
+            parsed.address && parsed.address.locality,
+            parsed.location && parsed.location.city
+          ];
+          let rawCity = '';
+          for (const c of candidates) { if (typeof c === 'string' && c.trim()) { rawCity = c.trim(); break; } }
+
+          // resolve finalCity robustly (handles spaces, punctuation, different key forms)
+          const finalCity = (typeof resolveTidewaterCity === 'function') ? resolveTidewaterCity(rawCity) : (rawCity ? titleCase(rawCity) : '');
+
+          // --- Default JSON source to Home Advisor when absent ---
+          const rawSource = (parsed.source || parsed.provider) ? (parsed.source || parsed.provider) : 'Home Advisor';
+
+          // --- Build normalized out object from parsed JSON keys ---
+          let out = {
+            firstName: parsed.firstName || parsed.firstname || parsed.first || parsed.fname || '',
+            lastName: parsed.lastName || parsed.lastname || parsed.last || parsed.lname || '',
+            streetAddress: parsed.streetAddress || parsed.address || parsed.street || parsed.line1 || (parsed.address && parsed.address.line1) || '',
+            apt: parsed.apt || parsed.unit || parsed.building || (parsed.address && parsed.address.unit) || '',
+            city: finalCity,
+            state: (parsed.state || (parsed.address && parsed.address.state) || parsed.region || '').toUpperCase(),
+            zip: parsed.zip || parsed.postal || (parsed.address && parsed.address.postalCode) || parsed.postcode || '',
+            email: parsed.email || (parsed.contact && parsed.contact.email) || '',
+            phone: parsed.phone || parsed.telephone || (parsed.contact && parsed.contact.phone) || parsed.phoneNumber || '',
+            source: rawSource
+          };
+
+          // --- Fill missing state from zip or inferred city when possible ---
+          if (!out.state && out.zip) out.state = (typeof inferStateFromZip === 'function') ? inferStateFromZip(out.zip) : '';
+          if (!out.state && finalCity) {
+            const key = (typeof cleanCityString === 'function') ? cleanCityString(finalCity) : (finalCity || '').toString().toLowerCase();
+            if ((TIDEWATER_MAP && TIDEWATER_MAP[key]) || (Array.isArray(TIDEWATER_CITIES) && TIDEWATER_CITIES.includes((finalCity||'').toUpperCase()))) {
+              out.state = 'VA';
+            }
+          }
+
+          // --- Scan the text after JSON for phone/email if JSON omitted them ---
+          out = (typeof scanAfterJson === 'function') ? scanAfterJson(raw, jsonSnippet, out) : out;
+
+          // --- Ensure out.city is canonical (re-resolve if scanAfterJson mutated it) ---
+          if (out.city && typeof resolveTidewaterCity === 'function') {
+            out.city = resolveTidewaterCity(out.city);
+          }
+
+          // --- Compute tidewater flag using normalized city and state ---
+          out.tidewater = (out.state === 'VA' && (typeof isTidewaterCityName === 'function' ? isTidewaterCityName(out.city) : false));
+
+          // --- Return normalized, ordered object for UI ---
+          return {
+            firstName: out.firstName || '',
+            lastName: out.lastName || '',
+            streetAddress: out.streetAddress || '',
+            apt: out.apt || '',
+            city: out.city || '',
+            state: out.state || '',
+            zip: out.zip || '',
+            email: out.email || '',
+            phone: out.phone || '',
+            source: out.source || '',
+            tidewater: !!out.tidewater
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('parseRawInput JSON error', e);
+  }
+  
+  // ---------- Free-form fallback ----------
+  try {
+    const lines = trimmed.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let out = { firstName:'', lastName:'', streetAddress:'', apt:'', city:'', state:'', zip:'', email:'', phone:'', source:'' };
+
+    // --- Labeled email extraction ("email" lines) ---
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^e-?mail\b/i.test(line)) {
+        const m = line.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,})/);
+        if (m) { out.email = m[1].trim(); lines.splice(i,1); break; }
+      }
+    }
+    // --- Fallback email (single-token line that looks like an email) ---
+    if (!out.email) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.includes('@') && line.includes('.') && !/\s/.test(line)) { out.email = line.trim(); lines.splice(i,1); break; }
+      }
+    }
+
+    // --- Labeled phone extraction ("phone" lines) ---
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^phone\b/i.test(line)) {
+        if (/temporary/i.test(line)) { lines.splice(i,1); break; }
+        const m = line.match(/(\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})/);
+        if (m) { out.phone = m[1].trim(); lines.splice(i,1); break; }
+      }
+    }
+    // --- Fallback phone (any line containing a US phone pattern) ---
+    if (!out.phone) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const m = line.match(/(\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})/);
+        if (m) { out.phone = m[1].trim(); lines.splice(i,1); break; }
+      }
+    }
+
+    // --- Labeled address extraction ("address" lines) ---
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^address\b/i.test(line)) {
+        let addr = line.replace(/^address\b[:\s]*/i,'').trim();
+        const ex = extractAptFromCSZ(addr);
+        addr = ex.csz; if (ex.apt && !out.apt) out.apt = ex.apt;
+        const csz = parseCityStateZip(addr);
+        let streetOnly = addr;
+        if (csz.city) streetOnly = streetOnly.replace(new RegExp(csz.city,'i'),'');
+        if (csz.state) streetOnly = streetOnly.replace(new RegExp(csz.state,'i'),'');
+        if (csz.zip) streetOnly = streetOnly.replace(new RegExp(csz.zip,'i'),'');
+        streetOnly = streetOnly.replace(/,+/g,'').trim();
+        out.streetAddress = streetOnly; out.city = csz.city; out.state = csz.state; out.zip = csz.zip;
+        lines.splice(i,1); break;
+      }
+    }
+
+    // --- Source detection (first/last line heuristics) ---
+    function isAcceptedSourceLine(s){
+      return !!(s && /\b(homeadvisor|home advisor|google|baton|bing|yelp|facebook|crunchbase|bpm|ha|angi)\b/i.test(s));
+    }
+
+    const looksLikeSingleToken = s => !!s && /^[A-Za-z0-9._-]{1,40}$/.test(s);
+    const looksLikeShortPhrase = s => !!s && /^[A-Za-z0-9 .,_-]{1,40}$/.test(s);
+    const looksLikeName = s => !!s && /^\S+\s+\S+/.test(s); // two words -> likely a name
+    const looksLikePhoneLine = s => !!s && /(\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})/.test(s);
+    const looksLikeEmailLine = s => !!s && /@/.test(s) && /\./.test(s);
+    const looksLikeAddressFragment = s => !!s && /^\d+\s+/.test(s);
+
+    if (lines.length && isAcceptedSourceLine(lines[lines.length-1])) {
+      out.source = lines.pop().trim();
+    } else if (lines.length && isAcceptedSourceLine(lines[0])) {
+      out.source = lines.shift().trim();
+    } else {
+      const maybeEnd = lines[lines.length-1] ? lines[lines.length-1].trim() : '';
+      const maybeStart = lines[0] ? lines[0].trim() : '';
+
+      // Prefer a single token at the end (no spaces) that isn't a name/phone/email/address
+      if (maybeEnd && looksLikeSingleToken(maybeEnd) && !looksLikeName(maybeEnd) && !looksLikePhoneLine(maybeEnd) && !looksLikeEmailLine(maybeEnd) && !looksLikeAddressFragment(maybeEnd)) {
+        out.source = lines.pop().trim();
+      } else if (maybeEnd && looksLikeShortPhrase(maybeEnd) && !looksLikeName(maybeEnd) && !looksLikePhoneLine(maybeEnd) && !looksLikeEmailLine(maybeEnd) && !looksLikeAddressFragment(maybeEnd) && maybeEnd.length <= 25) {
+        // allow short multi-word phrases like "web form" if desired (cap length)
+        out.source = lines.pop().trim();
+      } else if (maybeStart && looksLikeSingleToken(maybeStart) && !looksLikeName(maybeStart) && !looksLikePhoneLine(maybeStart) && !looksLikeEmailLine(maybeStart) && !looksLikeAddressFragment(maybeStart)) {
+        out.source = lines.shift().trim();
+      } else {
+        out.source = 'Google';
+      }
+    }
+
+    // --- One-line address (street + city/state/zip) or street with next-line ZIP ---
+    let addressLineIdx = lines.findIndex(l => /^\d+\s+.*\b(?:st|street|rd|road|dr|drive|ave|avenue|blvd|boulevard|ter|terrace|way|ln|lane|ct|court|pkwy|parkway|cir|circle|pl|place|trl|trail)\b/i.test(l));
+    if (addressLineIdx >= 0) {
+      const rawLine = lines[addressLineIdx];
+      let streetPart = '', cityStateZip = '';
+      if (rawLine.includes(',')) {
+        const parts = rawLine.split(',');
+        streetPart = parts[0].trim();
+        cityStateZip = parts.slice(1).join(',').trim();
+      } else {
+        streetPart = rawLine.trim();
+        const nextLine = lines[addressLineIdx + 1] || '';
+        if (/\d{5}/.test(nextLine)) { cityStateZip = nextLine.trim(); lines.splice(addressLineIdx + 1, 1); }
+      }
+      const endExtract = extractAptFromCSZ(cityStateZip);
+      cityStateZip = endExtract.csz; if (endExtract.apt && !out.apt) out.apt = endExtract.apt;
+      const aptRE = /\b(?:apt|apt\.|apartment|unit|suite|ste|bldg|building|room|rm|fl|floor|#)\s+(?!NE\b|NW\b|SE\b|SW\b)[A-Za-z0-9-]+/i;
+      const foundApt = streetPart.match(aptRE);
+      let cleanStreet = streetPart.replace(/\bNortheast\b/i,'NE').replace(/\bNorthwest\b/i,'NW').replace(/\bSoutheast\b/i,'SE').replace(/\bSouthwest\b/i,'SW');
+      if (foundApt) { out.apt = out.apt || foundApt[0].trim(); cleanStreet = cleanStreet.replace(foundApt[0],'').replace(/\s+/g,' ').trim(); }
+      const csz = parseCityStateZip(cityStateZip);
+      out.streetAddress = cleanStreet; out.city = csz.city; out.state = csz.state; out.zip = csz.zip;
+      lines.splice(addressLineIdx,1);
+    }
+
+    // --- Fallback: separate street and city/state/zip lines ---
+    if (!out.streetAddress) {
+      let streetIdx = lines.findIndex(l => /^\d+\b/.test(l));
+      if (streetIdx === -1) streetIdx = lines.findIndex(l => /\d/.test(l));
+      if (streetIdx >= 0) {
+        let streetLine = lines[streetIdx].trim();
+        const aptRE = /\b(?:apt|apt\.|apartment|unit|suite|ste|bldg|building|room|rm|fl|floor|#)\s+(?!NE\b|NW\b|SE\b|SW\b)[A-Za-z0-9-]+/i;
+        const foundApt = streetLine.match(aptRE);
+        if (foundApt) { out.apt = out.apt || foundApt[0].trim(); streetLine = streetLine.replace(foundApt[0], '').replace(/\s+/g, ' ').trim(); }
+        streetLine = streetLine.replace(/\bNortheast\b/i, 'NE').replace(/\bNorthwest\b/i, 'NW').replace(/\bSoutheast\b/i, 'SE').replace(/\bSouthwest\b/i, 'SW');
+        out.streetAddress = streetLine; lines.splice(streetIdx, 1);
+        const nextLine = lines[streetIdx] || '';
+        const endExtract = extractAptFromCSZ(nextLine); let nextLineClean = endExtract.csz; if (endExtract.apt && !out.apt) out.apt = endExtract.apt;
+        const cszMatch = nextLineClean.match(/^([A-Za-z\s]+)[,\s]+([A-Za-z]{2})\s+(\d{5})$/);
+        if (cszMatch) {
+          out.city = titleCase(cszMatch[1].trim()); out.state = cszMatch[2].toUpperCase(); out.zip = cszMatch[3];
+          lines.splice(streetIdx,1);
+        } else {
+          const cityLineIdx = lines.findIndex(l => /\d{5}/.test(l));
+          if (cityLineIdx >= 0) {
+            const ex = extractAptFromCSZ(lines[cityLineIdx]); const csz = parseCityStateZip(ex.csz);
+            out.city = csz.city; out.state = csz.state; out.zip = csz.zip; if (ex.apt && !out.apt) out.apt = ex.apt; lines.splice(cityLineIdx,1);
+          }
+        }
+      }
+    }
+
+    // --- Infer state from ZIP if missing ---
+    if (!out.state && out.zip) out.state = inferStateFromZip(out.zip);
+    // --- Autofill 'Washington' for DC Zips if city missing ---
+    if (!out.city && out.state === 'DC' && Array.isArray(DC_ZIP_CODES) && DC_ZIP_CODES.includes(out.zip)) out.city = 'Washington';
+
+    // --- Name from remaining first line (fallback) ---
+    if (lines.length > 0) {
+      const nameLine = lines[0].trim();
+      const nameParts = nameLine.split(/\s+/).filter(Boolean);
+      if (nameParts.length >= 2) { out.firstName = nameParts[0]; out.lastName = nameParts.slice(1).join(' '); }
+      else out.firstName = nameParts[0] || '';
+    }
+
+    // --- Final normalization ---
+    out.firstName = titleCase(out.firstName);
+    out.lastName = titleCase(out.lastName);
+    out.city = titleCase(out.city);
+    out.state = (out.state || '').toUpperCase();
+    out.streetAddress = (out.streetAddress || '').replace(/\s+/g,' ').trim();
+    out.zip = (out.zip || '').toString().replace(/[^\d]/g,'').slice(0,5);
+    out.email = (out.email || '').trim();
+    out.phone = (out.phone || '').trim();
+
+    // --- Try apt extraction from any remaining lines if still empty ---
+    if (!out.apt) {
+      for (const l of lines) {
+        const ea = extractAptFromCSZ(l);
+        if (ea && ea.apt) { out.apt = ea.apt; break; }
+      }
+    }
+
+    // --- Tidewater detection (final) ---
+    out.tidewater = (out.state === 'VA' && Array.isArray(TIDEWATER_CITIES) && TIDEWATER_CITIES.includes((out.city||'').toUpperCase()))
+      || (!!out.city && !!out.state && out.state === 'VA' && !!TIDEWATER_MAP[cleanCityString(out.city)]);
+
+    // --- Return final normalized ordered object ---
+    return {
+      firstName: out.firstName || '',
+      lastName: out.lastName || '',
+      streetAddress: out.streetAddress || '',
+      apt: out.apt || '',
+      city: out.city || '',
+      state: out.state || '',
+      zip: out.zip || '',
+      email: out.email || '',
+      phone: out.phone || '',
+      source: out.source || '',
+      tidewater: !!out.tidewater
+    };
+  } catch (e) {
+    console.warn('parseRawInput free-form path error', e);
+    return null;
+  }
+}
+
+/* ---------- UI helpers + wiring ---------- */
+
+function fillFields(parsed){
+  if(!parsed) parsed = {};
+  ['firstName','lastName','streetAddress','apt','city','state','zip','email','phone','source'].forEach(k=>{
+    const el = document.getElementById(k);
+    if(el) el.value = parsed[k] || '';
+  });
+  const tide = document.getElementById('tidewater');
+  if(tide) tide.checked = !!parsed.tidewater;
+  const preview = document.getElementById('preview');
+  if(preview) preview.textContent = JSON.stringify(parsed, null, 2);
+}
+
+function gatherFieldsObj(){
+  const f = {};
+  ['firstName','lastName','streetAddress','apt','city','state','zip','email','phone','source'].forEach(k=>{
+    const el = document.getElementById(k);
+    f[k] = el ? (el.value || '').trim() : '';
+  });
+  const autoTide = (f.state.toUpperCase() === 'VA' && TIDEWATER_CITIES.includes((f.city||'').toUpperCase()));
+  f.tidewater = document.getElementById('tidewater').checked ? true : autoTide;
+  return f;
+}
+
+/* Button handlers (parse, save, clear, preview toggles, log) */
+
+// Simple in-memory log for recent entries
+const LOG = [];
+
+document.getElementById('parseBtn').addEventListener('click', ()=>{
+  const raw = document.getElementById('raw').value || '';
+  let parsed = null;
+  if(raw && raw.includes('{')) parsed = parseRawInput(raw);
+  if(!parsed) parsed = parseRawInput(raw); // parseRawInput handles free-form too
+  parsed = parsed && typeof parsed === 'object' ? parsed : {};
+  // normalize city key for map lookup
+  const cityKey = ((parsed.city || '') + '').toLowerCase().replace(/[^a-z\s]/g,'').replace(/\s+/g,' ').trim();
+  const isTideFromParser = typeof parsed.tidewater === 'boolean' ? parsed.tidewater : null;
+  const isTideFromMap = !!TIDEWATER_MAP[cityKey] || (Array.isArray(TIDEWATER_CITIES) && TIDEWATER_CITIES.includes((parsed.city||'').toUpperCase()));
+  parsed.tidewater = isTideFromParser !== null ? isTideFromParser : isTideFromMap;
+  fillFields(parsed);
+  // add to simple log
+  LOG.unshift({ts:Date.now(), entry: parsed});
+  if(LOG.length>20) LOG.length=20;
+  renderLogPreview();
+});
+
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  ['raw','firstName','lastName','streetAddress','apt','city','state','zip','email','phone','source'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  const tide = document.getElementById('tidewater'); if(tide) tide.checked = false;
+  document.getElementById('preview').textContent = '{}';
+});
+
+document.getElementById('togglePreview').addEventListener('click', ()=>{
+  const body = document.getElementById('previewBody');
+  if(body.style.display === 'none' || !body.style.display) { body.style.display = 'block'; document.getElementById('togglePreview').textContent = 'Hide'; }
+  else { body.style.display = 'none'; document.getElementById('togglePreview').textContent = 'Show'; }
+});
+
+document.getElementById('toggleLog').addEventListener('click', ()=>{
+  const body = document.getElementById('logBody');
+  if(body.style.display === 'none' || !body.style.display) { body.style.display = 'block'; document.getElementById('toggleLog').textContent = 'Hide'; }
+  else { body.style.display = 'none'; document.getElementById('toggleLog').textContent = 'Show'; }
+});
+
+document.getElementById('toggleOlder').addEventListener('click', ()=>{
+  const cont = document.getElementById('olderContainer');
+  const btn = document.getElementById('toggleOlder');
+  if(cont.style.display === 'none' || !cont.style.display) { cont.style.display = 'block'; btn.textContent = 'Hide older entries'; }
+  else { cont.style.display = 'none'; btn.textContent = 'Show older entries'; }
+});
+
+// Copy JSON button
+document.getElementById('copyJson').addEventListener('click', ()=>{
+  const obj = gatherFieldsObj();
+  const txt = JSON.stringify(obj, null, 2);
+  navigator.clipboard.writeText(txt).then(()=>{ alert('Copied JSON to clipboard'); }, ()=>{ alert('Copy failed'); });
+});
+
+// Save entry (generateBtn) appends to LOG and resets form (simple demo)
+document.getElementById('generateBtn').addEventListener('click', ()=>{
+  const entry = gatherFieldsObj();
+  LOG.unshift({ts:Date.now(), entry});
+  if(LOG.length>100) LOG.length=100;
+  renderLogPreview();
+  // simple success hint
+  const s = document.getElementById('logStatus');
+  if(s) s.textContent = 'Saved entry';
+  setTimeout(()=>{ if(s) s.textContent = ''; }, 1500);
+});
+
+// Download/clear log
+document.getElementById('downloadLog').addEventListener('click', ()=>{
+  const data = LOG.map(r=>r.entry);
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'entries.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
+document.getElementById('clearLog').addEventListener('click', ()=>{
+  LOG.length = 0; renderLogPreview();
+});
+
+// render log preview
+function renderLogPreview(){
+  const p = document.getElementById('logPreview');
+  const older = document.getElementById('olderPreview');
+  const olderCount = document.getElementById('olderCount');
+  if(!p) return;
+  const recent = LOG.slice(0,4);
+  p.innerHTML = recent.map(r=> JSON.stringify(r.entry, null, 2)).join('\n\n');
+  const olderList = LOG.slice(4);
+  older.innerHTML = olderList.map(r=> JSON.stringify(r.entry, null, 2)).join('\n\n');
+  olderCount.textContent = olderList.length ? `${olderList.length} older` : '';
+}
+
+/* ensure preview empty initially */
+document.getElementById('preview').textContent = '{}';
+// initialize UI state
+renderLogPreview();
+document.getElementById('previewBody').style.display = 'none';
+document.getElementById('logBody').style.display = 'none';
+document.getElementById('togglePreview').textContent = 'Show';
+document.getElementById('toggleLog').textContent = 'Show';
+document.getElementById('preview').textContent = '{}';
+
+// optional: auto-select raw textarea on load for faster testing
+window.addEventListener('load', ()=>{ const r = document.getElementById('raw'); if(r) r.focus(); });
+
+// end of script and document
+</script>
+</body>
+</html>
+</script>
+</body>
+</html>
